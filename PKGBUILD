@@ -11,18 +11,11 @@ provides=('greetd-greeter')
 backup=('etc/clavis-greeter.conf')
 options=('!strip')
 
-source=(
-    'build.sh'
-    'setup.sh'
-    'backend/greeter-backend.py'
-    'session/clavis-greeter-session'
-    'overrides/shell.qml'
-    'overrides/ClavisLock.qml'
-    'overrides/SystemIdentityService.qml'
-    'overrides/AvatarService.qml'
-    'overrides/WallpaperService.qml'
-)
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+# The package is built straight from this repository. Local sources with
+# subdirectories are not supported by makepkg (it only looks for the basename
+# in $startdir), so the files are copied from $startdir below instead.
+source=()
+sha256sums=()
 
 package() {
     install -d "$pkgdir/usr/lib/clavis-greeter/overrides" \
@@ -33,14 +26,14 @@ package() {
 
     # Greeter sources (the shell tree itself is generated at setup time from the
     # installed Clavis shell, so it is not shipped in the package).
-    install -m755 "$srcdir/build.sh" "$pkgdir/usr/lib/clavis-greeter/build.sh"
-    install -m755 "$srcdir/greeter-backend.py" "$pkgdir/usr/lib/clavis-greeter/backend/"
-    install -m755 "$srcdir/clavis-greeter-session" "$pkgdir/usr/lib/clavis-greeter/session/"
-    install -m644 "$srcdir"/*.qml "$pkgdir/usr/lib/clavis-greeter/overrides/"
+    install -m755 "$startdir/build.sh" "$pkgdir/usr/lib/clavis-greeter/build.sh"
+    install -m755 "$startdir/backend/greeter-backend.py" "$pkgdir/usr/lib/clavis-greeter/backend/"
+    install -m755 "$startdir/session/clavis-greeter-session" "$pkgdir/usr/lib/clavis-greeter/session/"
+    install -m644 "$startdir"/overrides/*.qml "$pkgdir/usr/lib/clavis-greeter/overrides/"
 
     # Commands.
-    install -m755 "$srcdir/clavis-greeter-session" "$pkgdir/usr/bin/clavis-greeter-session"
-    install -m755 "$srcdir/setup.sh" "$pkgdir/usr/bin/clavis-greeter-setup"
+    install -m755 "$startdir/session/clavis-greeter-session" "$pkgdir/usr/bin/clavis-greeter-session"
+    install -m755 "$startdir/setup.sh" "$pkgdir/usr/bin/clavis-greeter-setup"
 
     cat > "$pkgdir/usr/bin/clavis-greeter-build" <<'EOF'
 #!/bin/bash
