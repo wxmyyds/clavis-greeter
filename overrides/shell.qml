@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 // Clavis Greeter -- greetd login screen that reuses Clavis' real lock screen.
 //
 // The lock UI is Clavis' own `qs.Modules.Lock.DefaultLock` (giant clock, avatar,

@@ -2,6 +2,8 @@
 
 一个**完全照抄 [Clavis Shell](https://github.com/StatIndet/quickshell) 锁屏样式**的 greetd 图形登录界面。
 
+> 本项目是 Clavis Shell 的**衍生作品**，遵循 **GPL-3.0-only**（与上游一致）。
+
 Clavis/Quickshell 本身不提供 greeter 能力（它的 `WlSessionLock` 只能在已登录会话里用），
 所以这个项目把 Clavis 的锁屏模块原样拿出来，跑在一个最小化的 **niri** 会话里，通过 greetd IPC 完成认证。
 
@@ -110,6 +112,30 @@ sudo rm -rf /var/lib/clavis-greeter /usr/lib/clavis-greeter
 - **成功判定靠 marker 文件**：后端在 greetd 接受会话后写 `CLAVIS_GREETER_OK_FILE`，
   wrapper 轮询到该文件才终止 niri 并 `exit 0`，避免 greetd 在认证成功前就切走 VT。
 
-## License
+## 许可证 / License
 
-MIT
+**GPL-3.0-only** —— 与上游 [Clavis Shell](https://github.com/StatIndet/quickshell) 保持一致。
+
+本项目是 Clavis Shell 的衍生作品，具体体现在：
+
+- `overrides/ClavisLock.qml` 直接派生自上游 `Modules/Lock/DefaultLock.qml`
+- 运行时通过符号链接复用上游的 `Modules/`、`Widgets/`、`Components/`、`Common/`、`Services/`、`assets/` 等模块
+- `build.sh` 生成的 `shell/` 树中包含上游的 `LICENSE` 与 `licenses/` 第三方许可文件
+
+因此任何分发（含打包）都必须遵守 GPL-3.0 条款，并在提供二进制时一并提供完整对应源码。
+
+```
+Copyright (C) 2026 wxmyyds
+Copyright (C) Clavis Shell contributors (https://github.com/StatIndet/quickshell)
+
+This program is free software: you can redistribute it and/or modify it under
+ the terms of the GNU General Public License as published by the Free Software
+ Foundation, version 3.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+ WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+ this program.  If not, see <https://www.gnu.org/licenses/>.
+```

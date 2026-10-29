@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# SPDX-License-Identifier: GPL-3.0-only
 """Clavis Greeter -- greetd IPC backend.
 
 Speaks the greetd IPC protocol (see `man 7 greetd-ipc`) and exposes a tiny

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
 """Mock greetd server for testing greeter-backend.py without touching the real
 greetd. Implements just enough of the greetd IPC protocol to exercise the auth
 flow. Records the start_session request so tests can assert on it.

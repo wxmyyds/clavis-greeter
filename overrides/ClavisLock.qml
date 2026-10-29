@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Derived from Clavis Shell's Modules/Lock/DefaultLock.qml (GPL-3.0-only).
 import QtQuick
 import QtQuick.Effects
 import Quickshell.Wayland

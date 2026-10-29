@@ -1,11 +1,12 @@
 # Maintainer: wxmyyds <wxmyyds@users.noreply.github.com>
+# SPDX-License-Identifier: GPL-3.0-only
 pkgname=clavis-greeter
 pkgver=1.0.0
 pkgrel=1
 pkgdesc='Clavis-styled graphical greeter for greetd, running on niri + quickshell'
 arch=('any')
 url="https://github.com/wxmyyds/clavis-greeter"
-license=('MIT')
+license=('GPL-3.0-only')
 depends=('bash' 'python' 'niri' 'quickshell' 'greetd')
 provides=('greetd-greeter')
 backup=('etc/clavis-greeter.conf')

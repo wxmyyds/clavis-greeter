@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Configure clavis-greeter as the greetd login screen.
 #
 # Run once after installing the package (or from install-local.sh):

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Build the Clavis Greeter shell tree.
 #
 # Strategy: reuse Clavis' *real* QML modules (Common, Components, Widgets,

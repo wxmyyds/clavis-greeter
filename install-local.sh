@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Local installer for clavis-greeter (mirrors what the package installs).
 #
 #   sudo ./install-local.sh [target-user]
