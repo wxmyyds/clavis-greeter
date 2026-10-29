@@ -70,12 +70,50 @@ fi
 # 4. Writable home for the greeter account (Qt cache/config).
 install -d -o greeter -g greeter -m 755 /var/lib/clavis-greeter/home
 
-# 5. Build the shell tree from the installed Clavis shell.
+# 5. Mirror the desktop's font preferences into the greeter's own config so the
+#    login screen renders with the fonts the user actually has installed.
+GREETER_HOME=/var/lib/clavis-greeter/home
+install -d -o greeter -g greeter -m 755 "$GREETER_HOME/.config/clavis"
+python3 - "$TARGET_HOME" "$GREETER_HOME" <<'PY'
+import json, os, sys
+
+user_home, greeter_home = sys.argv[1], sys.argv[2]
+src = os.path.join(user_home, ".config/clavis/config.json")
+dst = os.path.join(greeter_home, ".config/clavis/config.json")
+
+try:
+    data = json.load(open(src, encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    sys.exit(0)
+
+fonts = (data.get("theme") or {}).get("fonts") or {}
+fonts = {k: v for k, v in fonts.items() if isinstance(v, str) and v.strip()}
+if not fonts:
+    sys.exit(0)
+
+try:
+    target = json.load(open(dst, encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    target = {}
+
+theme = target.setdefault("theme", {})
+merged = theme.get("fonts") if isinstance(theme.get("fonts"), dict) else {}
+merged.update(fonts)
+theme["fonts"] = merged
+
+with open(dst, "w", encoding="utf-8") as fh:
+    json.dump(target, fh, indent=2, ensure_ascii=False)
+    fh.write("\n")
+print("    fonts     <- " + ", ".join(f"{k}={v}" for k, v in sorted(fonts.items())))
+PY
+chown greeter:greeter "$GREETER_HOME/.config/clavis/config.json" 2>/dev/null || true
+
+# 6. Build the shell tree from the installed Clavis shell.
 if [ -x /usr/bin/clavis-greeter-build ]; then
     /usr/bin/clavis-greeter-build
 fi
 
-# 6. Greeter compositor config: reuse the desktop's output blocks so the login
+# 7. Greeter compositor config: reuse the desktop's output blocks so the login
 #    screen has the same scale/resolution as the session.
 python3 - "$TARGET_HOME" > /usr/lib/clavis-greeter/niri-greeter.kdl <<'PYEOF'
 import os, re, sys
@@ -113,7 +151,7 @@ if ! niri validate -c /usr/lib/clavis-greeter/niri-greeter.kdl >/dev/null 2>&1; 
     niri validate -c /usr/lib/clavis-greeter/niri-greeter.kdl 2>&1 | sed 's/^/      /' >&2
 fi
 
-# 7. greetd configuration (backup + replace).
+# 8. greetd configuration (backup + replace).
 STAMP="$(date +%Y%m%d-%H%M%S)"
 mkdir -p /etc/greetd
 
@@ -128,10 +166,10 @@ user = "greeter"
 EOF
 echo "    greetd config backed up to /etc/greetd/config.toml.pre-clavis.$STAMP"
 
-# 8. Emergency text console on tty2 (immune to greeter problems).
+# 9. Emergency text console on tty2 (immune to greeter problems).
 systemctl enable getty@tty2.service >/dev/null 2>&1 || true
 
-# 9. Rollback helper: plain text login.
+# 10. Rollback helper: plain text login.
 #    agreety ships as a hard dependency of greetd, so this fallback keeps
 #    working even if the graphical greeter (or any other greeter) is removed.
 cat > /etc/greetd/config.toml.agreety-fallback <<'EOF2'
