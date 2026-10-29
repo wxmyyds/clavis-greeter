@@ -1,0 +1,73 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: makepkg (Arch x86_64)
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Prepare build user
+        run: |
+          pacman -Syu --noconfirm --needed sudo git namcap python
+          useradd -m builder
+          printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/builder
+          chmod 0440 /etc/sudoers.d/builder
+
+      - uses: actions/checkout@v5
+
+      - name: Build package
+        run: |
+          chown -R builder:builder .
+          sudo -u builder makepkg -f -d --noconfirm
+          ls -lh ./*.pkg.tar.*
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+
+      - name: namcap
+        continue-on-error: true
+        run: |
+          sudo -u builder namcap PKGBUILD
+          sudo -u builder namcap ./*.pkg.tar.zst
+
+      - name: Install smoke test
+        run: |
+          pacman -U --noconfirm -dd ./*.pkg.tar.zst
+          test -x /usr/bin/clavis-greeter-session
+          test -x /usr/bin/clavis-greeter-setup
+          test -x /usr/bin/clavis-greeter-build
+          test -f /etc/clavis-greeter.conf
+          test -f /usr/lib/clavis-greeter/build.sh
+          test -f /usr/lib/clavis-greeter/backend/greeter-backend.py
+          for f in shell ClavisLock SystemIdentityService AvatarService WallpaperService; do
+            test -f "/usr/lib/clavis-greeter/overrides/$f.qml"
+          done
+          bash -n /usr/bin/clavis-greeter-session
+          bash -n /usr/bin/clavis-greeter-setup
+          bash -n /usr/lib/clavis-greeter/build.sh
+          python3 -m py_compile /usr/lib/clavis-greeter/backend/greeter-backend.py
+          test "$(cat /etc/clavis-greeter.conf | grep -c CLAVIS_GREETER_USER)" -eq 1
+          echo "package layout OK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clavis-greeter-any
+          path: '*.pkg.tar.zst'
+          retention-days: 30
+
+      - name: Attach package to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.pkg.tar.zst
+            .SRCINFO

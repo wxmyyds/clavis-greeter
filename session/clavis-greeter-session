@@ -1,0 +1,76 @@
+#!/bin/bash
+# greetd default_session wrapper for clavis-greeter.
+#
+# Runs the Clavis-styled graphical greeter inside niri (the same compositor the
+# desktop uses, so output scale matches). When the backend confirms a session
+# was accepted by greetd, niri is stopped and this script exits so greetd can
+# start the real session.
+set -u
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Configuration written by clavis-greeter-setup.
+[ -r /etc/clavis-greeter.conf ] && . /etc/clavis-greeter.conf
+TARGET_USER="${CLAVIS_GREETER_USER:-}"
+if [ -z "$TARGET_USER" ]; then
+    echo "clavis-greeter: CLAVIS_GREETER_USER is not set in /etc/clavis-greeter.conf" >&2
+    sleep 5
+    exit 1
+fi
+
+# Private, greeter-owned runtime/config/cache so Quickshell does not need a
+# writable home of its own.
+RUNTIME=/tmp/clavis-greeter-runtime
+mkdir -p "$RUNTIME" && chmod 700 "$RUNTIME"
+export XDG_RUNTIME_DIR="$RUNTIME"
+
+export HOME=/var/lib/clavis-greeter/home
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+mkdir -p "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" 2>/dev/null
+
+export CLAVIS_GREETER_USER="$TARGET_USER"
+export CLAVIS_GREETER_WALLPAPER=/var/lib/clavis-greeter/wallpaper.jpg
+export CLAVIS_GREETER_AVATAR=/var/lib/clavis-greeter/avatar
+export CLAVIS_GREETER_BACKEND=/usr/lib/clavis-greeter/backend/greeter-backend.py
+export CLAVIS_GREETER_STARTUP="${CLAVIS_GREETER_STARTUP:-clock}"
+
+OK_FILE="$RUNTIME/session.ok"
+export CLAVIS_GREETER_OK_FILE="$OK_FILE"
+rm -f "$OK_FILE"
+
+SHELL_DIR=/usr/lib/clavis-greeter/shell
+CONFIG=/usr/lib/clavis-greeter/niri-greeter.kdl
+
+if [ ! -x /usr/bin/niri ]; then
+    echo "clavis-greeter: niri is not installed" >&2
+    sleep 5
+    exit 1
+fi
+
+# Start niri with the greeter as its startup command.
+/usr/bin/niri -c "$CONFIG" -- /usr/bin/quickshell -c "$SHELL_DIR" &
+NIRI_PID=$!
+
+# Wait until either niri exits on its own or the backend signals success.
+while kill -0 "$NIRI_PID" 2>/dev/null; do
+    if [ -f "$OK_FILE" ]; then
+        # greetd accepted the session; tear down the greeter compositor so the
+        # real session can take over the VT.
+        sleep 1
+        kill -TERM "$NIRI_PID" 2>/dev/null
+        while kill -0 "$NIRI_PID" 2>/dev/null; do sleep 0.2; done
+        break
+    fi
+    sleep 0.3
+done
+wait "$NIRI_PID" 2>/dev/null
+
+if [ -f "$OK_FILE" ]; then
+    exit 0
+fi
+
+# The greeter exited without a session. Delay so greetd does not spin, then let
+# it restart the greeter. The emergency console is Ctrl+Alt+F2 (getty@tty2).
+sleep 5
+exit 1
