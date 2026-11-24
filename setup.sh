@@ -23,6 +23,15 @@ if [ -z "$TARGET_USER" ] || ! id "$TARGET_USER" >/dev/null 2>&1; then
 fi
 
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+PAM_FILE=/etc/pam.d/greetd
+PAM_BACKUP_PATH=""
+if [ -r /etc/clavis-greeter.conf ]; then
+    PAM_BACKUP_PATH="$(awk -F= '$1 == "CLAVIS_GREETER_PAM_BACKUP" { print substr($0, index($0, "=") + 1); exit }' /etc/clavis-greeter.conf)"
+fi
+case "$PAM_BACKUP_PATH" in
+    /etc/pam.d/greetd.pre-clavis.*) ;;
+    *) PAM_BACKUP_PATH="" ;;
+esac
 echo "==> Configuring clavis-greeter for '$TARGET_USER' (home $TARGET_HOME)"
 
 # 1. Ensure the greeter account exists.
@@ -36,6 +45,7 @@ usermod -aG video greeter 2>/dev/null || true
 cat > /etc/clavis-greeter.conf <<EOF
 # Target account the greeter logs in as (single-user desktop).
 CLAVIS_GREETER_USER=$TARGET_USER
+CLAVIS_GREETER_PAM_BACKUP=$PAM_BACKUP_PATH
 EOF
 chmod 644 /etc/clavis-greeter.conf
 
@@ -151,8 +161,44 @@ if ! niri validate -c /usr/lib/clavis-greeter/niri-greeter.kdl >/dev/null 2>&1; 
     niri validate -c /usr/lib/clavis-greeter/niri-greeter.kdl 2>&1 | sed 's/^/      /' >&2
 fi
 
-# 8. greetd configuration (backup + replace).
+# 8. Add oo7's optional hooks to the greetd-only PAM stack. Authentication
+# stores PAM_AUTHTOK, then the session hook sends it to oo7 after pam_systemd
+# has prepared the user's runtime directory. Existing local PAM policy remains
+# intact; back up the file before the first change so rollback can restore it.
 STAMP="$(date +%Y%m%d-%H%M%S)"
+if [ ! -f "$PAM_FILE" ]; then
+    echo "error: $PAM_FILE is missing; install greetd before configuring clavis-greeter" >&2
+    exit 1
+fi
+
+HAS_OO7_AUTH=0
+HAS_OO7_SESSION=0
+grep -Eq '^[[:space:]]*auth[[:space:]]+optional[[:space:]]+pam_oo7[.]so([[:space:]]|$)' "$PAM_FILE" && HAS_OO7_AUTH=1
+grep -Eq '^[[:space:]]*session[[:space:]]+optional[[:space:]]+pam_oo7[.]so[[:space:]]+auto_start([[:space:]]|$)' "$PAM_FILE" && HAS_OO7_SESSION=1
+
+if [ "$HAS_OO7_AUTH" -eq 0 ] || [ "$HAS_OO7_SESSION" -eq 0 ]; then
+    if [ -z "$PAM_BACKUP_PATH" ] || [ ! -f "$PAM_BACKUP_PATH" ]; then
+        PAM_BACKUP_PATH="$PAM_FILE.pre-clavis.$STAMP"
+        cp -a "$PAM_FILE" "$PAM_BACKUP_PATH"
+        CONFIG_TMP="$(mktemp /etc/clavis-greeter.conf.XXXXXX)"
+        awk -F= '$1 != "CLAVIS_GREETER_PAM_BACKUP"' /etc/clavis-greeter.conf > "$CONFIG_TMP"
+        printf 'CLAVIS_GREETER_PAM_BACKUP=%s\n' "$PAM_BACKUP_PATH" >> "$CONFIG_TMP"
+        chmod 644 "$CONFIG_TMP"
+        mv "$CONFIG_TMP" /etc/clavis-greeter.conf
+        echo "    greetd PAM config backed up to $PAM_BACKUP_PATH"
+    fi
+    if [ "$HAS_OO7_AUTH" -eq 0 ]; then
+        printf '\nauth       optional     pam_oo7.so\n' >> "$PAM_FILE"
+    fi
+    if [ "$HAS_OO7_SESSION" -eq 0 ]; then
+        printf 'session    optional     pam_oo7.so auto_start\n' >> "$PAM_FILE"
+    fi
+    echo "    enabled optional oo7 PAM hooks for greetd"
+else
+    echo "    oo7 PAM hooks are already present"
+fi
+
+# 9. greetd configuration (backup + replace).
 mkdir -p /etc/greetd
 
 [ -f /etc/greetd/config.toml ] && cp -a /etc/greetd/config.toml "/etc/greetd/config.toml.pre-clavis.$STAMP"
@@ -166,10 +212,10 @@ user = "greeter"
 EOF
 echo "    greetd config backed up to /etc/greetd/config.toml.pre-clavis.$STAMP"
 
-# 9. Emergency text console on tty2 (immune to greeter problems).
+# 10. Emergency text console on tty2 (immune to greeter problems).
 systemctl enable getty@tty2.service >/dev/null 2>&1 || true
 
-# 10. Rollback helper: plain text login.
+# 11. Rollback helper: plain text login.
 #    agreety ships as a hard dependency of greetd, so this fallback keeps
 #    working even if the graphical greeter (or any other greeter) is removed.
 cat > /etc/greetd/config.toml.agreety-fallback <<'EOF2'
@@ -193,6 +239,15 @@ if [ ! -f "$F" ]; then
 fi
 cp -a "$F" /etc/greetd/config.toml
 echo "restored text login: $F -> /etc/greetd/config.toml"
+PAM_BACKUP="$(awk -F= '$1 == "CLAVIS_GREETER_PAM_BACKUP" { print substr($0, index($0, "=") + 1); exit }' /etc/clavis-greeter.conf 2>/dev/null || true)"
+case "$PAM_BACKUP" in
+    /etc/pam.d/greetd.pre-clavis.*)
+        if [ -f "$PAM_BACKUP" ]; then
+            cp -a "$PAM_BACKUP" /etc/pam.d/greetd
+            echo "restored greetd PAM config: $PAM_BACKUP -> /etc/pam.d/greetd"
+        fi
+        ;;
+esac
 echo "run: systemctl restart greetd   (or reboot)"
 EOF
 chmod 755 /usr/bin/clavis-greeter-rollback

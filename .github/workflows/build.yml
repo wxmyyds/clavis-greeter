@@ -54,6 +54,9 @@ jobs:
           done
           bash -n /usr/bin/clavis-greeter-session
           bash -n /usr/bin/clavis-greeter-setup
+          grep -q 'pam_oo7' /usr/bin/clavis-greeter-setup
+          grep -q 'auto_start' /usr/bin/clavis-greeter-setup
+          grep -q 'CLAVIS_GREETER_PAM_BACKUP' /usr/bin/clavis-greeter-setup
           bash -n /usr/lib/clavis-greeter/build.sh
           python3 -m py_compile /usr/lib/clavis-greeter/backend/greeter-backend.py
           test "$(cat /etc/clavis-greeter.conf | grep -c CLAVIS_GREETER_USER)" -eq 1
