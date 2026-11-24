@@ -25,8 +25,10 @@ greetd ──▶ clavis-greeter-session (wrapper)
 全部来自 Arch 官方仓库：
 
 ```
-bash  python  niri  quickshell  greetd
+bash  python  niri  quickshell  greetd  oo7
 ```
+
+可选：`gcr` 提供非 GNOME 桌面下的图形钥匙串解锁提示；正常 PAM 自动解锁不依赖它。
 
 `greetd-agreety` 会作为 `greetd` 的硬依赖自动存在，本项目**不调用它**，但它同时是
 `clavis-greeter-rollback` 的兜底方案（文字登录永远可用）。
@@ -37,10 +39,13 @@ bash  python  niri  quickshell  greetd
 # 1. 安装包
 sudo pacman -U clavis-greeter-*.pkg.tar.zst
 
-# 2. 配置（创建 greeter 账户、复制壁纸/头像、生成 niri 配置、改写 greetd 配置）
+# 2. 配置（创建 greeter 账户、复制壁纸/头像、生成 niri 配置、配置 greetd/PAM）
 sudo clavis-greeter-setup "$USER"
 
-# 3. 重启生效
+# 3. 作为目标用户，在自己的桌面会话中启用 oo7 用户服务（不要加 sudo）
+systemctl --user enable oo7-daemon.service
+
+# 4. 重启后，从 Clavis greeter 登录
 reboot
 ```
 
@@ -54,15 +59,40 @@ reboot
 | 4 | 准备 greeter 的可写 HOME（`/var/lib/clavis-greeter/home`） |
 | 5 | 生成 `/usr/lib/clavis-greeter/shell`（符号链接到已安装的 Clavis shell + 若干 shim） |
 | 6 | 从目标用户的 niri 配置提取 `output` 块，生成 `niri-greeter.kdl` |
-| 7 | 备份并改写 `/etc/greetd/config.toml` |
-| 8 | 启用 `getty@tty2`（应急文字控制台） |
-| 9 | 生成 `clavis-greeter-rollback` 回退脚本 |
+| 7 | 在 `/etc/pam.d/greetd` 添加 optional 的 oo7 auth/session hooks；修改前备份原文件 |
+| 8 | 备份并改写 `/etc/greetd/config.toml` |
+| 9 | 启用 `getty@tty2`（应急文字控制台） |
+| 10 | 生成 `clavis-greeter-rollback` 回退脚本（若 PAM 是本工具修改的，也会恢复备份） |
+
+## oo7 登录自动解锁
+
+`clavis-greeter-setup` 为 greetd 专用 PAM 栈添加 `auth optional pam_oo7.so` 和
+`session optional pam_oo7.so auto_start`。登录密码通过 PAM 暂存并交给 oo7，模块是 `optional`，
+所以 oo7 不可用时不应阻止正常登录。首次部署后，以目标用户身份执行
+`systemctl --user enable oo7-daemon.service`，让 oo7 在用户会话启动时运行。
+
+**登录钥匙串密码必须与系统登录密码一致**，否则 PAM 会安全地跳过解锁，应用仍可能显示钥匙串提示。
+如果两者不同，可运行 `oo7-cli change-secret --collection login`，在本机提示中将钥匙串密码改为登录密码；
+不要把密码写进命令或配置文件。
+
+如需在以后通过 `passwd` 修改系统密码时同步钥匙串密码，可选择在
+`/etc/pam.d/system-auth` 的 `password` 栈、`pam_unix.so` 后添加：
+
+```pam
+password optional pam_oo7.so
+```
+
+这会影响所有包含该共享 `system-auth` 栈的密码修改服务，因此本项目安装脚本不会自动改它。
+
+首次验证时，登录后运行 `oo7-cli list-collections`；`login` 行没有 `(locked)` 表示已解锁。
+该命令只显示集合状态，不输出密钥内容。
 
 ## 卸载 / 回退
 
 ```bash
 # 回退成文字登录（不依赖本项目，也不依赖任何已删包）
 sudo clavis-greeter-rollback
+systemctl --user disable oo7-daemon.service
 sudo systemctl restart greetd
 
 # 或者 Ctrl+Alt+F2 进应急控制台，登录后执行上面两条
